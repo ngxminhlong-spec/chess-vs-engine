@@ -7,5 +7,5 @@ const tpl = fs.readFileSync('template.html', 'utf8');
 fs.rmSync('dist', { recursive: true, force: true });
 fs.mkdirSync('dist', { recursive: true });
 fs.writeFileSync('dist/index.html', tpl.replace('<!--APP_SCRIPT-->', () => `<script>${js}</script>`));
-fs.copyFileSync('public/engine-worker.js', 'dist/engine-worker.js');
-console.log('built dist/index.html', (fs.statSync('dist/index.html').size / 1024).toFixed(1) + ' KB, engine-worker.js');
+fs.cpSync('public', 'dist', { recursive: true });
+console.log('built dist/index.html', (fs.statSync('dist/index.html').size / 1024).toFixed(1) + ' KB, engine + worker in public/');

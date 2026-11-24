@@ -33,13 +33,20 @@ function init() {
   worker = new Worker(WORKER_URL);
   worker.onmessage = e => { for (const fn of [...listeners]) fn(String(e.data)); };
   worker.onerror = () => { for (const fn of [...listeners]) fn('worker-error'); };
-  initPromise = (async () => {
+  // Fail fast if the worker itself cannot load (network error, blocked script, ...).
+  const workerFailed = new Promise((_, reject) => {
+    worker.addEventListener('error', e => reject(new Error(e.message || 'worker failed to load')));
+  });
+  const startup = (async () => {
     send('uci');
     await waitFor(l => l === 'uciok', 30000);
     send('isready');
     await waitFor(l => l === 'readyok', 30000);
-  })().catch(err => {
+  })();
+  initPromise = Promise.race([startup, workerFailed]).catch(err => {
     initPromise = null;
+    if (worker) worker.terminate();
+    worker = null;
     throw new Error('engine failed to start (' + err.message + ')');
   });
   return initPromise;

@@ -1,10 +1,11 @@
 // Runs Stockfish 19 (lite, single-threaded) in a Web Worker.
-// The engine loader is fetched from jsDelivr. Its .wasm request is redirected
-// to the same CDN, so the 1.8 MB WASM never has to be deployed with the site.
-// ?engineBase=... overrides the CDN folder (used for local testing).
+// Engine files are served from this site (public/sf/), so the page does not
+// depend on any third-party CDN at runtime.
+// ?engineBase=... can point at another folder (used for local testing).
 const params = new URL(self.location.href).searchParams;
-const BASE = params.get('engineBase') || 'https://cdn.jsdelivr.net/npm/stockfish@19.0.1/bin/';
+const BASE = new URL(params.get('engineBase') || './sf/', self.location.href).href;
 const realFetch = self.fetch.bind(self);
+// The loader asks for "stockfish.wasm" by a generated URL; send it to the real file.
 self.fetch = (input, init) => {
   const url = String(input && input.url ? input.url : input);
   return realFetch(url.endsWith('.wasm') ? BASE + 'stockfish-19-lite-single.wasm' : input, init);
