@@ -1,0 +1,349 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#161512">
+<title>Chess vs Engine</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23629924'/%3E%3Cpath d='M0 38h64v12a14 14 0 0 1-14 14H14A14 14 0 0 1 0 50z' fill='%234a7a1b'/%3E%3Ccircle cx='32' cy='20' r='8' fill='%23fff'/%3E%3Crect x='24' y='29' width='16' height='5' rx='2.5' fill='%23fff'/%3E%3Cpath d='M27 34h10c1 5 5 8 6 15H21c1-7 5-10 6-15z' fill='%23fff'/%3E%3Crect x='17' y='49' width='30' height='7' rx='3.5' fill='%23fff'/%3E%3C/svg%3E">
+<style>
+:root {
+  --bg: #161512;
+  --panel: #262421;
+  --panel-2: #302e2b;
+  --line: #3c3a37;
+  --text: #ecebe8;
+  --muted: #9a9892;
+  --green: #629924;
+  --green-ink: #0f1a05;
+  --sq-light: #f0d9b5;
+  --sq-dark: #b58863;
+  --last: rgba(255, 235, 90, .5);
+  --hint: rgba(98, 153, 36, .6);
+  --sel: rgba(20, 85, 30, .5);
+  --dot: rgba(20, 85, 30, .5);
+  --bad: #f08a7e;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+html, body { margin: 0; background: var(--bg); }
+body {
+  color: var(--text);
+  font: 15px/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  min-height: 100dvh;
+}
+button { font: inherit; color: inherit; cursor: pointer; }
+button:focus-visible { outline: 3px solid var(--green); outline-offset: 2px; }
+
+.app {
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 10px max(12px, env(safe-area-inset-right, 0px)) 0 max(12px, env(safe-area-inset-left, 0px));
+}
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 4px 2px 10px;
+}
+.top h1 { margin: 0; font-size: 17px; font-weight: 700; letter-spacing: -.01em; display: flex; align-items: center; gap: 10px; }
+.logo { width: 30px; height: 30px; flex: none; display: block; }
+.top .src { font-size: 12px; color: var(--muted); }
+
+/* Layout: one column on phones, board + side panel on wide screens */
+.layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 12px;
+  grid-template-areas: "game" "side" "actions";
+}
+.game { grid-area: game; min-width: 0; }
+.side { grid-area: side; min-width: 0; }
+.actions { grid-area: actions; }
+
+@media (min-width: 860px) {
+  .app { padding-top: 20px; }
+  .layout {
+    grid-template-columns: minmax(0, 640px) 300px;
+    grid-template-areas: "game side" "game actions";
+    grid-template-rows: 1fr auto;
+    gap: 16px 24px;
+    justify-content: center;
+    align-items: start;
+  }
+}
+
+/* Player bars */
+.player {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 4px;
+  min-height: 46px;
+}
+.avatar {
+  width: 32px; height: 32px; flex: none;
+  border-radius: 6px;
+  background: var(--panel-2);
+  display: grid; place-items: center;
+  color: var(--muted);
+}
+.avatar svg { width: 20px; height: 20px; }
+.pname { font-weight: 650; }
+.pmeta { font-size: 12px; color: var(--muted); }
+.who { min-width: 0; display: grid; }
+.caps {
+  display: flex; align-items: center; flex-wrap: wrap;
+  margin-left: auto; min-width: 0; padding-left: 6px;
+}
+.caps img, .caps .gl { width: 18px; height: 18px; margin-right: -7px; flex: none; }
+.caps .gl { font-size: 15px; line-height: 18px; text-align: center; color: var(--text); }
+.caps .adv { margin-left: 12px; font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.think {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--green); opacity: 0; flex: none;
+}
+.player.busy .think { opacity: 1; animation: pulse 1s infinite ease-in-out; }
+@keyframes pulse { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .player.busy .think { animation: none; } }
+
+/* Board */
+.boardrow { display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 6px; align-items: start; }
+.evalv {
+  align-self: stretch;
+  background: #000;
+  border-radius: 3px; overflow: hidden;
+  display: flex; flex-direction: column-reverse;
+}
+.evalv.flip { flex-direction: column; }
+#eval-fill { background: #f2f1ee; height: 50%; transition: height .35s ease; }
+.board {
+  width: 100%; min-width: 0;
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-rows: repeat(8, minmax(0, 1fr));
+  aspect-ratio: 1 / 1;
+  border-radius: 4px; overflow: hidden;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .4);
+  touch-action: manipulation;
+}
+.sq {
+  position: relative; min-width: 0;
+  margin: 0; padding: 0; border: 0;
+  display: flex; align-items: center; justify-content: center;
+  background: none;
+}
+.sq.light { background-color: var(--sq-light); }
+.sq.dark { background-color: var(--sq-dark); }
+.sq .ov { position: absolute; inset: 0; pointer-events: none; }
+.sq.last .ov { background: var(--last); }
+.sq.hint .ov { background: var(--hint); }
+.sq.sel .ov { background: var(--sel); }
+.sq.check .ov { background: radial-gradient(circle, rgba(255,0,0,.85) 0%, rgba(231,0,0,.55) 40%, rgba(169,0,0,0) 72%); }
+.sq.target::after {
+  content: ""; position: absolute; width: 28%; height: 28%;
+  border-radius: 50%; background: var(--dot); pointer-events: none;
+}
+.sq.capture::after {
+  content: ""; position: absolute; inset: 3%;
+  border-radius: 50%; border: 5px solid var(--dot); pointer-events: none;
+}
+.sq:focus-visible { outline: 3px solid var(--green); outline-offset: -3px; z-index: 3; }
+.pc { position: relative; z-index: 1; width: 94%; height: 94%; pointer-events: none; user-select: none; -webkit-user-drag: none; }
+.pc.gl { display: grid; place-items: center; font-size: clamp(24px, 8vw, 52px); line-height: 1; }
+.co {
+  position: absolute; z-index: 2; pointer-events: none;
+  font-size: clamp(8px, 2.2vw, 11px); font-weight: 700; line-height: 1;
+}
+.co.f { right: 3px; bottom: 2px; }
+.co.r { left: 3px; top: 3px; }
+.light .co { color: var(--sq-dark); }
+.dark .co { color: var(--sq-light); }
+
+/* Side panel */
+.side {
+  background: var(--panel);
+  border-radius: 10px;
+  padding: 12px 14px;
+}
+#status { margin: 0 0 8px; font-weight: 650; min-height: 1.4em; }
+#status.err { color: var(--bad); }
+.moves {
+  display: flex; gap: 4px 10px; align-items: center;
+  overflow-x: auto; white-space: nowrap;
+  font-variant-numeric: tabular-nums; font-size: 14px;
+  padding-bottom: 2px; min-height: 24px;
+  scrollbar-width: none;
+}
+.moves::-webkit-scrollbar { display: none; }
+.moves:empty::before { content: "No moves yet"; color: var(--muted); }
+.mn { color: var(--muted); }
+.mv { padding: 1px 5px; border-radius: 4px; }
+.mv.cur { background: var(--panel-2); font-weight: 650; }
+@media (min-width: 860px) {
+  .moves {
+    display: grid; grid-template-columns: 2.4em 1fr 1fr; gap: 2px 6px;
+    overflow-x: hidden; overflow-y: auto; white-space: normal;
+    max-height: 340px; align-items: baseline; scrollbar-width: thin;
+  }
+}
+
+/* Action bar: sticks to the bottom on phones */
+.actions {
+  display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px;
+  position: sticky; bottom: 0; z-index: 5;
+  background: var(--bg);
+  padding: 8px 0 max(10px, env(safe-area-inset-bottom, 0px));
+}
+.actions button {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+  min-height: 56px;
+  background: var(--panel); border: 0; border-radius: 10px;
+  font-size: 12px; font-weight: 600; color: var(--text);
+}
+.actions button svg { width: 22px; height: 22px; }
+.actions button.primary { background: var(--green); color: var(--green-ink); }
+.actions button:active:not(:disabled) { filter: brightness(1.15); }
+.actions button:disabled { opacity: .4; cursor: default; }
+@media (min-width: 860px) { .actions { position: static; padding: 0; } }
+
+/* Dialogs */
+.overlay {
+  position: fixed; inset: 0; z-index: 20;
+  background: rgba(0, 0, 0, .6);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: 0 0 env(safe-area-inset-bottom, 0px);
+}
+.overlay[hidden] { display: none; }
+.sheet {
+  width: 100%; max-width: 440px;
+  background: var(--panel);
+  border-radius: 16px 16px 0 0;
+  padding: 18px 16px max(18px, env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 560px) {
+  .overlay { align-items: center; }
+  .sheet { border-radius: 16px; }
+}
+.sheet h2 { margin: 0 0 14px; font-size: 18px; }
+.sheet h3 { margin: 14px 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px; }
+.seg button {
+  padding: 11px 6px; border-radius: 8px;
+  background: var(--panel-2); border: 2px solid transparent; font-weight: 600;
+}
+.seg button[aria-pressed="true"] { border-color: var(--green); }
+.go {
+  width: 100%; margin-top: 18px; padding: 14px;
+  border: 0; border-radius: 10px;
+  background: var(--green); color: var(--green-ink);
+  font-size: 16px; font-weight: 700;
+}
+.cancel { width: 100%; margin-top: 8px; padding: 12px; border: 0; background: none; color: var(--muted); }
+.promo { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.promo button {
+  aspect-ratio: 1; border: 0; border-radius: 10px; background: var(--sq-light);
+  display: grid; place-items: center; padding: 4px;
+}
+.promo button img { width: 100%; height: 100%; }
+.promo button .gl { font-size: 40px; color: #222; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <h1>
+      <svg class="logo" viewBox="0 0 64 64" aria-hidden="true">
+        <rect width="64" height="64" rx="14" fill="#629924"/>
+        <path d="M0 38h64v12a14 14 0 0 1-14 14H14A14 14 0 0 1 0 50z" fill="#4a7a1b"/>
+        <circle cx="32" cy="20" r="8" fill="#fff"/>
+        <rect x="24" y="29" width="16" height="5" rx="2.5" fill="#fff"/>
+        <path d="M27 34h10c1 5 5 8 6 15H21c1-7 5-10 6-15z" fill="#fff"/>
+        <rect x="17" y="49" width="30" height="7" rx="3.5" fill="#fff"/>
+      </svg>
+      Chess vs Engine
+    </h1>
+    <span class="src">Engine: Stockfish 19 (local)</span>
+  </header>
+
+  <main class="layout">
+    <section class="game">
+      <div class="player" id="bar-top">
+        <div class="avatar" id="av-top"></div>
+        <div class="who"><span class="pname" id="name-top"></span><span class="pmeta" id="meta-top"></span></div>
+        <span class="think" aria-hidden="true"></span>
+        <div class="caps" id="caps-top"></div>
+      </div>
+
+      <div class="boardrow">
+        <div class="evalv" id="evalv" aria-hidden="true"><div id="eval-fill"></div></div>
+        <div id="board" class="board" role="grid" aria-label="Chess board"></div>
+      </div>
+
+      <div class="player" id="bar-bottom">
+        <div class="avatar" id="av-bottom"></div>
+        <div class="who"><span class="pname" id="name-bottom"></span><span class="pmeta" id="meta-bottom"></span></div>
+        <span class="think" aria-hidden="true"></span>
+        <div class="caps" id="caps-bottom"></div>
+      </div>
+    </section>
+
+    <aside class="side">
+      <p id="status" role="status" aria-live="polite"></p>
+      <div class="moves" id="moves"></div>
+    </aside>
+
+    <nav class="actions" aria-label="Game controls">
+      <button id="btn-new" class="primary">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" aria-hidden="true"><path d="M12 5v14M5 12h14"/></svg>
+        New
+      </button>
+      <button id="btn-undo">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 14 4 9l5-5"/><path d="M4 9h10.5a5.5 5.5 0 0 1 0 11H11"/></svg>
+        Undo
+      </button>
+      <button id="btn-hint">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6"/><path d="M10 22h4"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.5 1 1.2 1 2V17h6v-.3c0-.8.4-1.5 1-2A7 7 0 0 0 12 2z"/></svg>
+        Hint
+      </button>
+      <button id="btn-flip">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M7 4v16M7 20l-3-3M7 20l3-3"/><path d="M17 20V4M17 4l-3 3M17 4l3 3"/></svg>
+        Flip
+      </button>
+    </nav>
+  </main>
+</div>
+
+<!-- New game sheet -->
+<div class="overlay" id="ov-new" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="new-title">
+    <h2 id="new-title">New game</h2>
+    <h3>Play as</h3>
+    <div class="seg" id="seg-color">
+      <button data-v="w" aria-pressed="true">White</button>
+      <button data-v="b" aria-pressed="false">Black</button>
+      <button data-v="r" aria-pressed="false">Random</button>
+    </div>
+    <h3>Engine strength</h3>
+    <div class="seg" id="seg-level">
+      <button data-v="easy" aria-pressed="false">Easy</button>
+      <button data-v="quick" aria-pressed="false">Quick</button>
+      <button data-v="standard" aria-pressed="true">Standard</button>
+    </div>
+    <button class="go" id="btn-start">Start game</button>
+    <button class="cancel" id="btn-cancel">Cancel</button>
+  </div>
+</div>
+
+<!-- Promotion sheet -->
+<div class="overlay" id="ov-promo" hidden>
+  <div class="sheet" role="dialog" aria-modal="true" aria-labelledby="promo-title">
+    <h2 id="promo-title">Promote pawn to</h2>
+    <div class="promo" id="promo-opts"></div>
+  </div>
+</div>
+
+<!--APP_SCRIPT-->
+</body>
+</html>

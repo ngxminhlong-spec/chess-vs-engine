@@ -1,0 +1,11 @@
+import { build } from 'esbuild';
+import fs from 'node:fs';
+const r = await build({ entryPoints: ['src/main.js'], bundle: true, format: 'iife', minify: true, write: false, target: 'es2020' });
+const js = r.outputFiles[0].text;
+if (js.includes('</script')) throw new Error('bundle contains </script');
+const tpl = fs.readFileSync('template.html', 'utf8');
+fs.rmSync('dist', { recursive: true, force: true });
+fs.mkdirSync('dist', { recursive: true });
+fs.writeFileSync('dist/index.html', tpl.replace('<!--APP_SCRIPT-->', () => `<script>${js}</script>`));
+fs.copyFileSync('public/engine-worker.js', 'dist/engine-worker.js');
+console.log('built dist/index.html', (fs.statSync('dist/index.html').size / 1024).toFixed(1) + ' KB, engine-worker.js');
