@@ -6,7 +6,7 @@ const LEVELS = {
   quick: { label: 'Quick' },
   standard: { label: 'Standard' }
 };
-const PIECE_BASE = 'https://lichess1.org/assets/piece/cburnett/';
+const PIECE_BASE = './pieces/'; // cburnett set (GPLv2+), self-hosted for cross-origin isolation
 const LETTER = { king: 'K', queen: 'Q', rook: 'R', bishop: 'B', knight: 'N', pawn: 'P' };
 const GLYPH = { king: '♚', queen: '♛', rook: '♜', bishop: '♝', knight: '♞', pawn: '♟' };
 

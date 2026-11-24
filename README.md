@@ -18,6 +18,13 @@ Deploy the `dist/` folder to any static host (Vercel, Netlify, GitHub Pages, ...
 - `public/engine-worker.js`: loads Stockfish 19 (lite, single-threaded) from jsDelivr. The `.wasm` request is redirected to the same CDN.
 - `src/main.js`: UI.
 
+## Credits and headers
+
+- Piece images (`public/pieces/`): the cburnett set by Colin M.L. Burnett, GPLv2+ (taken from lichess.org's lila repository).
+- Stockfish 19 (`public/sf/`): Stockfish.js by Nathan Rugg, built from Stockfish, GPLv3.
+- `vercel.json` sends `Cross-Origin-Opener-Policy` and `Cross-Origin-Embedder-Policy` headers so the page is cross-origin isolated. That enables the multi-threaded engine. Without isolation, the lite single-threaded engine is used.
+- The full engine's WASM (`public/sf/stockfish-19.wasm`, ~99 MB) is stored with Git LFS. Run `git lfs pull` after cloning.
+
 ## Tests
 
 ```

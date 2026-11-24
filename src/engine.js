@@ -40,6 +40,8 @@ function init() {
   const startup = (async () => {
     send('uci');
     await waitFor(l => l === 'uciok', 30000);
+    const threads = Math.max(1, Math.min(8, (navigator.hardwareConcurrency || 2) - 1));
+    send('setoption name Threads value ' + threads);
     send('isready');
     await waitFor(l => l === 'readyok', 30000);
   })();
