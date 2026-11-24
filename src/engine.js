@@ -7,6 +7,7 @@ const LEVELS = {
 };
 
 let worker = null;
+let workerKind = null;
 let initPromise = null;
 const listeners = new Set();
 
@@ -28,11 +29,13 @@ function waitFor(test, ms) {
   });
 }
 
-function init() {
-  if (initPromise) return initPromise;
-  worker = new Worker(WORKER_URL);
+function init(kind) {
+  if (initPromise && workerKind === kind) return initPromise;
+  if (worker) worker.terminate();
+  initPromise = null;
+  workerKind = kind;
+  worker = new Worker(WORKER_URL + '?engine=' + kind);
   worker.onmessage = e => { for (const fn of [...listeners]) fn(String(e.data)); };
-  worker.onerror = () => { for (const fn of [...listeners]) fn('worker-error'); };
   // Fail fast if the worker itself cannot load (network error, blocked script, ...).
   const workerFailed = new Promise((_, reject) => {
     worker.addEventListener('error', e => reject(new Error(e.message || 'worker failed to load')));
@@ -45,13 +48,12 @@ function init() {
     send('isready');
     await waitFor(l => l === 'readyok', 30000);
   })();
-  initPromise = Promise.race([startup, workerFailed]).catch(err => {
-    initPromise = null;
-    if (worker) worker.terminate();
-    worker = null;
+  const p = Promise.race([startup, workerFailed]).catch(err => {
+    if (initPromise === p) { initPromise = null; if (worker) worker.terminate(); worker = null; }
     throw new Error('engine failed to start (' + err.message + ')');
   });
-  return initPromise;
+  initPromise = p;
+  return p;
 }
 
 // UCI scores are from the side to move; convert to White's view (positive = White better).
@@ -64,8 +66,8 @@ function parseScore(line, sign) {
 }
 
 // Returns { move, eval, mate } for the position, matching the shape the UI expects.
-export async function analyze(fen, level) {
-  await init();
+export async function analyze(fen, level, kind = 'full') {
+  await init(kind);
   const cfg = LEVELS[level] || LEVELS.standard;
   const sign = fen.split(' ')[1] === 'w' ? 1 : -1;
 

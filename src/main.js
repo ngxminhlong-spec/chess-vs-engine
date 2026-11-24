@@ -15,6 +15,7 @@ const $ = id => document.getElementById(id);
 let game = G.newGame();
 let me = 'white'; // chessops side names: 'white' | 'black'
 let level = 'standard';
+let engineKind = 'full';
 let flipped = false;
 let selected = null;
 let targets = [];
@@ -28,7 +29,7 @@ let pending = null; // { from, to } waiting for a promotion choice
 
 /* ---------- Engine (local Stockfish) ---------- */
 async function askEngine(fen) {
-  return analyze(fen, level);
+  return analyze(fen, level, engineKind);
 }
 
 // analyze() already returns the eval from White's view (positive = White is winning).
@@ -140,9 +141,10 @@ function undo() {
   render();
 }
 
-function startGame(colorChoice, lvl) {
+function startGame(colorChoice, lvl, kind) {
   game = G.newGame();
   level = lvl;
+  engineKind = kind || 'full';
   me = colorChoice === 'r' ? (Math.random() < .5 ? 'white' : 'black') : (colorChoice === 'w' ? 'white' : 'black');
   flipped = me === 'black';
   clearState();
@@ -175,7 +177,7 @@ function renderBar(pos, color) {
   const mine = color === me;
   $('av-' + pos).innerHTML = mine ? AVATAR_YOU : AVATAR_BOT;
   $('name-' + pos).textContent = mine ? 'You' : 'Engine';
-  $('meta-' + pos).textContent = (color === 'white' ? 'White' : 'Black') + (mine ? '' : ' · ' + LEVELS[level].label);
+  $('meta-' + pos).textContent = (color === 'white' ? 'White' : 'Black') + (mine ? '' : ' · ' + LEVELS[level].label + (engineKind === 'lite' ? ' · Lite' : ''));
   $('bar-' + pos).classList.toggle('busy', busy && !mine && !!busyMsg);
 
   const { got, diff } = G.capturedBy(game);
@@ -305,7 +307,7 @@ function segValue(id) {
   const b = $(id).querySelector('[aria-pressed="true"]');
   return b ? b.dataset.v : null;
 }
-['seg-color', 'seg-level'].forEach(id => {
+['seg-color', 'seg-level', 'seg-engine'].forEach(id => {
   $(id).addEventListener('click', e => {
     const b = e.target.closest('button');
     if (b) pickSeg(id, b.dataset.v);
@@ -317,7 +319,7 @@ $('btn-cancel').addEventListener('click', () => show($('ov-new'), false));
 $('ov-new').addEventListener('click', e => { if (e.target === $('ov-new')) show($('ov-new'), false); });
 $('btn-start').addEventListener('click', () => {
   show($('ov-new'), false);
-  startGame(segValue('seg-color'), segValue('seg-level'));
+  startGame(segValue('seg-color'), segValue('seg-level'), segValue('seg-engine'));
 });
 $('ov-promo').addEventListener('click', e => {
   if (e.target === $('ov-promo')) { pending = null; show($('ov-promo'), false); }
